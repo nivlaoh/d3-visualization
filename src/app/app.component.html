@@ -1,3 +1,17 @@
-<h1>
-  {{title}}
-</h1>
+<md-sidenav-container class="my-container" [style.background]="'#fafafa'">
+	<md-sidenav #start (open)="closeStartButton.focus()">
+    	<md-list>
+    		<h3 md-subheader>Technology</h3>
+    		<md-list-item>Test</md-list-item>
+    		<md-divider></md-divider>
+    	</md-list>
+    	<button md-button #closeStartButton (click)="start.close()">Close</button>
+	</md-sidenav>
+	<md-toolbar [color]="myColor">
+		<button md-icon-button (click)="start.open()">
+			<md-icon>menu</md-icon>
+		</button>
+		<span>{{title}}</span>
+	</md-toolbar>
+	<router-outlet></router-outlet>
+</md-sidenav-container>
