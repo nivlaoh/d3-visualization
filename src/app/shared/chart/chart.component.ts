@@ -13,11 +13,12 @@ export class ChartComponent implements OnInit, OnChanges {
 	@Input() config: Array<ChartConfig>;
 	private host;
 	private svg;
+	private chartLayer;
 	private margin;
 	private width;
 	private height;
 	private xScale;
-	private innerXScale;
+	private xInScale;
 	private colorScale;
 	private yScale;
 	private xAxis;
@@ -46,12 +47,13 @@ export class ChartComponent implements OnInit, OnChanges {
 		this.margin = { top: 10, right: 10, bottom: 30, left: 40 };
 		this.width = this.htmlElement.clientWidth - this.margin.left - this.margin.right;
 		this.height = this.width * 0.8 - this.margin.top - this.margin.bottom;
-		this.xScale = d3.scaleTime().range([0, this.width]);
-		//this.xScale = d3.scaleBand().range([0, this.width]);
-		this.innerXScale = d3.scaleBand();
+		//this.height = this.htmlElement.clientHeight - this.margin.top - this.margin.bottom;
+		//this.xScale = d3.scaleTime().range([0, this.width]);
+		this.xScale = d3.scaleBand().range([0, this.width]).paddingInner(0.1);
+		this.xInScale = d3.scaleBand();
 		this.yScale = d3.scaleLinear().range([this.height, 0]);
 		this.colorScale = d3.scaleOrdinal()
-			.range(["#98abc5", "#8a89a6", "#7b6888", "#6b486b", "#a05d56", "#d0743c", "#ff8c00"]);
+			.range(['#98abc5', '#8a89a6', '#7b6888', '#6b486b', '#a05d56', '#d0743c', '#ff8c00']);
 	}
 
 	private buildSVG(): void {
@@ -61,12 +63,14 @@ export class ChartComponent implements OnInit, OnChanges {
 			.attr('height', this.height + this.margin.top + this.margin.bottom)
 			.append('g')
 			.attr('transform', 'translate(' + this.margin.left + ',' + this.margin.top + ')');
+		this.chartLayer = this.svg.append("g").classed("chartLayer", true);
 	}
 
 	private drawXAxis(): void {
 		this.xAxis = d3.axisBottom(this.xScale)
-			.ticks(d3.timeYear, 5)
-			.tickFormat(d3.timeFormat('%Y'));
+			//.ticks(d3.timeYear, 5)
+			//.tickFormat(d3.timeFormat('%Y'));
+			;
 		this.svg.append('g')
 			.attr('class', 'x axis')
 			.attr('transform', 'translate(0,' + this.height + ')')
@@ -84,23 +88,72 @@ export class ChartComponent implements OnInit, OnChanges {
 	}
 
 	private getMaxY(): number {
-		let maxValuesOfAreas = [];
-		this.config.forEach(data => maxValuesOfAreas.push(Math.max.apply(Math, data.dataset.map(d => d.y))));
-		return Math.max(...maxValuesOfAreas);
+		return d3.max(this.config.map(data => {
+			return d3.max(data.dataset.map(function(d) {
+	            var values = Object.keys(d.values).map(function(key) {
+	                return d.values[key].infocomm_industry_revenue;
+	            });
+            	return d3.max(values);
+        	}));
+		}));
 	}
 
 	private populate(): void {
-		this.config.forEach((config: ChartConfig) => {
-			this.xScale.domain(d3.extent(config.dataset, (d: any) => d.x));
-			//this.innerXScale.domain(config.categoryNames).rangeRoundBands([0, this.xScale.rangeBand()]);
-			this.yScale.domain([0, this.getMaxY()]);
-			this.svg.append('path')
-				.datum(config.dataset)
-				//.data(config.dataset)
-				.attr('class', 'line')
-				.attr('d', d3.line()
-					.x((d: any) => this.xScale(d.x))
-					.y((d: any) => this.yScale(d.y)));
+		this.config.forEach((c: ChartConfig) => {
+			this.xScale.domain(c.dataset.map((d: any) => { return d.key; }));
+			this.xInScale.domain(c.categoryNames).range([0, this.xScale.bandwidth()]);
+			let maxY = this.getMaxY();
+			//console.log('maxY', maxY);
+			this.yScale.domain([0, maxY]);
+
+			let revenuePoints = this.chartLayer.selectAll('.revenue').data(c.dataset);
+
+			let newRevenue = revenuePoints.enter()
+				.append('g')
+				.attr('class', 'revenue');
+
+			revenuePoints.merge(newRevenue)
+				.attr('transform', (d) => {
+					return 'translate(' + [this.xScale(parseInt(d.key)), 0] + ")";
+				});
+
+			let bar = newRevenue.selectAll('.bar')
+            	.data((d) => { return d.values; });
+
+        	let newBar = bar.enter()
+        		.append('rect')
+        		.attr('class', 'bar');
+
+        	bar.merge(newBar)
+	            .attr('width', this.xInScale.bandwidth())
+	            .attr('height', 0)
+	            .attr('fill', (d) => { return this.colorScale(d.segment); })
+	            .attr('transform', (d) => { return 'translate(' + [this.xInScale(d.segment), this.height] + ')' });
+			
+			let t = d3.transition(null)
+				.duration(1000)
+				.ease(d3.easeLinear);
+
+	        bar.merge(newBar).transition(t)
+            	.attr('height', (d) => { return this.height - this.yScale(d.infocomm_industry_revenue); })
+            	.attr('transform', (d) => { return 'translate(' + [this.xInScale(d.segment), this.yScale(d.infocomm_industry_revenue)] + ')' });
+        	
+        	let legendRectSize = 18;
+        	let legendSpacing = 4;
+
+        	let legend = this.svg.selectAll('.legend')
+        		.data(this.colorScale.domain())
+        		.enter()
+        		.append('g')
+        		.attr('class', 'legend')
+        		.attr('transform', (d, i) => {
+        			let height = legendRectSize + legendSpacing;
+    				let offset =  height * this.colorScale.domain().length / 2;
+    				let horz = -2 * legendRectSize;
+    				let vert = i * height - offset;
+    				return 'translate(' + horz + ',' + vert + ')';
+        		});
+
 		});
 	}
 }

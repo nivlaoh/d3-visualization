@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { Http, Response } from '@angular/http';
 import * as moment from 'moment';
+import * as d3 from 'd3';
 
 import { ChartComponent, ChartConfig } from '../shared/index';
 
@@ -12,27 +13,40 @@ import { ChartComponent, ChartConfig } from '../shared/index';
 export class InfocommRevenueComponent implements OnInit {
 	private areaChartConfig: Array<ChartConfig>;
 	private statistics: any[] = new Array();
-	private csvData: any[] = [];
+	private rawData: any[];
 
 	constructor(private http: Http) { }
 
 	ngOnInit() {
-		this.http.get('/assets/revenue-of-infocomm-industry-by-market-segment.csv')
-			.subscribe(res => {
-				this.extractData(res);
-				this.getStats();
-			});
+		d3.csv('/assets/revenue-of-infocomm-industry-by-market-segment.csv', this.cast, (records) => {
+			this.rawData = records;
+			this.statistics = this.getStats(records);
+		});
  	}
 
- 	getStats() {
+ 	cast(d) {
+        Object.keys(d).forEach((key) => {
+            if (!isNaN(+d[key])) d[key] = +d[key];
+        })
+        return d;
+	}
+
+ 	getStats(statistics: any[]) {
+ 		let nested = d3.nest()
+ 			// .rollup((d: any[]) => {
+ 			// 	//delete d[0].year;
+ 			// 	return d[0];
+ 			// })
+ 			.key((d: any) => { return d.year; })
+ 			.entries(statistics);
+
+ 		// nested.forEach((d: any) => {
+			// d.zz = Object.keys(d.value).map((key) => {
+			// 	return { key: key, value: d.value[key] };
+			// });
+ 		// });
+
  		this.areaChartConfig = new Array<ChartConfig>();
- 		this.csvData.forEach(data => {
- 			this.statistics.push({
- 				year: parseInt(data[0]),
- 				segment: data[1],
- 				revenue: parseFloat(data[2])
- 			});
- 		});
  		let config = new ChartConfig();
 		config.settings = {
 			fill: 'rgba(1, 67, 163, 100)',
@@ -43,12 +57,12 @@ export class InfocommRevenueComponent implements OnInit {
 			config.categoryNames = new Array();
 		}
 		let catMap = {};
-		this.statistics.forEach(stats => {
-			config.dataset.push({ x: moment(stats.year, 'YYYY').toDate(), y: stats.revenue });
+		statistics.forEach(stats => {
 			if (catMap[stats.segment] == undefined) {
 				catMap[stats.segment] = 1;
 			}
 		});
+		config.dataset = nested;
 		
 		for (let cat in catMap) {
 			if (catMap.hasOwnProperty(cat)) {
@@ -56,29 +70,13 @@ export class InfocommRevenueComponent implements OnInit {
 			}
 		}
 		this.areaChartConfig.push(config);
+		return statistics;
 	}
 
-	private extractData(res: Response) {
-
-		let csvData = res['_body'] || '';
-		let allTextLines = csvData.split(/\r\n|\n/);
-		let headers = allTextLines[0].split(',');
-		let lines = [];
-
-		for (let i = 0; i < allTextLines.length; i++) {
-			if (i>0) {
-			    // split content based on comma
-			    let data = allTextLines[i].split(',');
-			    if (data.length == headers.length) {
-			        let tarr = [];
-			        for (let j = 0; j < headers.length; j++) {
-			            tarr.push(data[j]);
-			        }
-			        lines.push(tarr);
-			    }
-			}
-		}
-		this.csvData = lines;
+	redraw(event) {
+		console.log(event);
+		this.areaChartConfig.length = 0;
+		this.getStats(this.rawData);
 	}
 
 }

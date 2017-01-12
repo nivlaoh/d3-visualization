@@ -1,1 +1,1 @@
-<app-chart *ngIf="areaChartConfig" [config]="areaChartConfig"></app-chart>
+<app-chart *ngIf="areaChartConfig" [config]="areaChartConfig" (window:resize)="redraw($event)"></app-chart>
